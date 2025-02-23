@@ -109,25 +109,6 @@ loader_start:
 ;将内存换算成byte单位放到[total_mem_bytes]
 	mov [total_mem_bytes],edx
 
-
-
-
-
-
-
-
-
-
-
-
-	mov sp,LOADER_BASE_ADDR
-	mov bp,loadermsg
-	mov cx,17
-	mov ax,0x1301	
-	mov bx,0x001f	;页号为0，1f蓝底粉红字
-	mov dx,0x1800
-	int 0x10
-
 ;---------------- 准备进入保护模式 ----------------
 ;1打开A20
 ;2加载gdt
