@@ -1,7 +1,7 @@
 %include "boot.inc"
 section loader vstart=LOADER_BASE_ADDR
 LOADER_STACK_TOP equ LOADER_BASE_ADDR
-jmp loader_start
+
 ;构建GDT及其内部的描述符
 GDT_BASE:	dd 0x00000000	;第0个描述符不用
 			dd 0x00000000
@@ -18,7 +18,11 @@ VIDEO_DESC:	dd 0x80000007	;段基址0~15是8000，limit是7*4k
 GDT_SIZE equ $ - GDT_BASE
 GDT_LIMIT equ GDT_SIZE - 1
 
-times 60 dq 0	;预留60个描述符的空位，四字节
+times 60 dq 0	;预留60个描述符的空位，四字
+
+;total_mem_bytes用于保存内存容量，当前偏移文件头0x200位置
+total_mem_bytes dd 0	;内存中位置为0x900+0x200=0xb00
+
 SELECTOR_CODE equ (0x0001<<3) + TI_GDT + RPL0	;代码段为下标一的描述符，左移3位放到段寄存器后
 												;应该会丢掉高位的0
 SELECTOR_DATA equ (0x0002<<3) + TI_GDT + RPL0
