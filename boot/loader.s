@@ -141,16 +141,41 @@ setup_page:
 	mov eax,PAGE_DIR_TABLE_POS
 	add eax,0x1000		;eax指向第一个页表的位置
 	mov ebx,eax		;第一个页表的位置将来会用到要保存下来
-	or eax,PAGE_P | PAGE_RW_W | PAGE_US_U	;逻辑或选择属性组合
-	mov [PAGE_DIR_TABLE_POS+0x0],eax
+	or eax,PAGE_US_U | PAGE_RW_W | PAGE_P   	;逻辑或选择属性组合
+	mov [PAGE_DIR_TABLE_POS+0x0],eax		;页目录的第0项和第768项都放第一个页表的地址+属性
 	mov [PAGE_DIR_TABLE_POS+0xc00],eax		;0xc00代表页目录的3/4处，上面的1G属于os
-	sub eax,0x00
+	sub eax,0x1000
 	mov [PAGE_DIR_TABLE_POS+4092],eax		;页目录最后一项放页目录自身的地址
 
 ;下面创建页表项(PTE)
+	mov ecx,256		;把第一个页表的前256项(可映射1M)映射到物理地址低1M
+	mov esi,0
+	mov edx,PAGE_US_U | PAGE_RW_W | PAGE_P
 
+.create_pte:
+	mov [ebx+esi*4],edx
+	add edx,0x1000
+	inc esi
+	loop .create_pte
 
+;创建内核其他页表的PDE 
+	mov eax,PAGE_DIR_TABLE_POS
+	add eax,0x2000		;eax为第二个页表的位置
+	or eax,PAGE_US_U | PAGE_RW_W | PAGE_P
+	mov ebx,PAGE_DIR_TABLE_POS
 
+	;页目录第0项和第768项已经创建，现将第769~第1022项的虚拟地址映射到低地址
+	;第768项到第1022项似乎不够虚拟地址3G—4G差了4M，第1023项存PDE地址了，但感觉问题不大
+	mov ecx,254		
+	mov esi,769
+
+.create_kernel_pde:
+	mov [ebx+esi*4],eax
+	inc esi
+	add eax,0x1000
+	loop .create_kernel_pde
+	ret
+	
 ;---------------- 准备进入保护模式 ----------------
 ;1打开A20
 ;2加载gdt
