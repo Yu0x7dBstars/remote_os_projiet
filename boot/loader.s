@@ -158,7 +158,7 @@ setup_page:
 	inc esi
 	loop .create_pte
 
-;创建内核其他页表的PDE,但还没有其与物理地址映射，只是填充了页目录项
+;创建内核其他页表的PDE,但还没有与物理地址映射，只是填充了页目录项
 	mov eax,PAGE_DIR_TABLE_POS
 	add eax,0x2000		;eax为第二个页表的位置
 	or eax,PAGE_US_U | PAGE_RW_W | PAGE_P
