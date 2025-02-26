@@ -109,6 +109,48 @@ loader_start:
 ;将内存换算成byte单位放到[total_mem_bytes]
 	mov [total_mem_bytes],edx
 
+call setup_page
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;------------- 创建页目录及页表 --------------- 
+;把1M上面4k的内存清空给页目录用
+setup_page:
+	mov ecx,0x1000
+	mov esi,0
+.clear_page_dir:
+	mov byte [PAGE_DIR_TABLE_POS+esi],0
+	inc esi
+	loop .clear_page_dir
+
+;开始创建页目录项(PDE) 
+.create_pde:	;创建Page Directory Entry
+	mov eax,PAGE_DIR_TABLE_POS
+	add eax,0x1000		;eax指向第一个页表的位置
+	mov ebx,eax		;第一个页表的位置将来会用到要保存下来
+	or eax,PAGE_P | PAGE_RW_W | PAGE_US_U	;逻辑或选择属性组合
+	mov [PAGE_DIR_TABLE_POS+0x0],eax
+	mov [PAGE_DIR_TABLE_POS+0xc00],eax		;0xc00代表页目录的3/4处，上面的1G属于os
+	sub eax,0x00
+	mov [PAGE_DIR_TABLE_POS+4092],eax		;页目录最后一项放页目录自身的地址
+
+;下面创建页表项(PTE)
+
+
+
 ;---------------- 准备进入保护模式 ----------------
 ;1打开A20
 ;2加载gdt
