@@ -18,6 +18,10 @@ VIDEO_DESC:	dd 0x80000007	;段基址0~15是8000，limit是7*4k
 GDT_SIZE equ $ - GDT_BASE
 GDT_LIMIT equ GDT_SIZE - 1
 
+SELECTOR_CODE equ (0x0001<<3) + TI_GDT + RPL0
+SELECTOR_DATA equ (0x0002<<3) + TI_GDT + RPL0
+SELECTOR_VIDEO equ (0x0003<<3) + TI_GDT + RPL0
+
 times 60 dq 0	;预留60个描述符的空位，四字
 
 ;total_mem_bytes用于保存内存容量，当前偏移文件头0x200位置
@@ -43,7 +47,7 @@ loader_start:
 	int 0x15
 	jc .e820_failed_so_try_e801		;cf返回1表示发生错误，调用0xe801子功能号
 	add di,cx	;di指向新的ards结构体地址
-	inc [ards_nr]	;ards个数加一
+	inc word [ards_nr]	;ards个数加一
 	cmp ebx,0	;若cf=0且ebx为0表示这是最后一个ards
 	jnz .e820_mem_get_loop
 
@@ -149,7 +153,7 @@ call setup_page
 	or dword [ebx+0x18+4],0xc0000000
 
 ;将gdt的基址加上0xc0000000使其成为内核所在的高地址
-	add [gdt_ptr+2],0xc00000000
+	add dword [gdt_ptr+2],0xc00000000
 
 ;将栈指针同样映射到内核地址
 	add esp,0xc0000000
@@ -164,9 +168,9 @@ call setup_page
 	mov cr0,eax
 
 ;在开启分页后，用gdt新的地址重新加载 
-	lgdt,[gdt_ptr]
+	lgdt [gdt_ptr]
 
-	mov [gs:160],'V'
+	mov byte [gs:160],'V'
 	jmp $
 
 ;------------- 创建页目录及页表 --------------- 
