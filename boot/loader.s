@@ -109,23 +109,66 @@ loader_start:
 ;将内存换算成byte单位放到[total_mem_bytes]
 	mov [total_mem_bytes],edx
 
+;---------------- 准备进入保护模式 ----------------
+;1打开A20
+;2加载gdt
+;3将cr0的pe位置为1
+
+;---------------- 打开A20 ---------------
+	in al,0x92
+	or al,0000_0010
+	out 0x92,al
+
+;---------------- 加载gdt ---------------
+	lgdt [gdt_ptr]
+
+;---------------- cr0第0位置1 ---------------
+	mov eax,cr0 
+	or eax,0x00000001
+	mov cr0,eax
+
+	jmp dword SELECTOR_CODE:p_mode_start	;刷新流水线
+
+[bits 32]
+p_mode_start:
+	mov ax,SELECTOR_DATA
+	mov ds,ax
+	mov es,ax
+	mov ss,ax
+	mov esp,LOADER_STACK_TOP
+	mov ax,SELECTOR_VIDEO
+	mov gs,ax
+	 
+	mov byte [gs:160],'p'
+
 call setup_page
+	sgdt [gdt_ptr]		;将gdtr中的值放入[gdt_ptr]中
 
+;将gdt描述符中视频段描述符中的段基址+0xc0000000 
+	mov ebx,[gdt_ptr+8]
+	or dword [ebx+0x18+4],0xc0000000
 
+;将gdt的基址加上0xc0000000使其成为内核所在的高地址
+	add [gdt_ptr+8],0xc00000000
 
+;将栈指针同样映射到内核地址
+	add esp,0xc0000000
 
+;把页目录地址赋给cr3 
+	mov eax,PAGE_DIR_TABLE_POS
+	mov cr3,eax
 
+;打开cr0的pg位（第31位）
+	mov eax,cr0
+	or eax,0x80000000
+	mov cr0,eax
 
+;在开启分页后，用gdt新的地址重新加载 
+	lgdt,[gdt_ptr]
 
-
-
-
-
-
-
-
-
-
+	mov [gs:160],'V'
+	jmp $
+	
 ;------------- 创建页目录及页表 --------------- 
 ;把1M上面4k的内存清空给页目录用
 setup_page:
@@ -176,36 +219,3 @@ setup_page:
 	loop .create_kernel_pde
 	ret
 
-;---------------- 准备进入保护模式 ----------------
-;1打开A20
-;2加载gdt
-;3将cr0的pe位置为1
-
-;---------------- 打开A20 ---------------
-	in al,0x92
-	or al,0000_0010
-	out 0x92,al
-
-;---------------- 加载gdt ---------------
-	lgdt [gdt_ptr]
-
-;---------------- cr0第0位置1 ---------------
-	mov eax,cr0 
-	or eax,0x00000001
-	mov cr0,eax
-
-	jmp dword SELECTOR_CODE:p_mode_start	;刷新流水线
-
-[bits 32]
-p_mode_start:
-	mov ax,SELECTOR_DATA
-	mov ds,ax
-	mov es,ax
-	mov ss,ax
-	mov esp,LOADER_STACK_TOP
-	mov ax,SELECTOR_VIDEO
-	mov gs,ax
-	 
-	mov byte [gs:160],'p'
-
-	jmp $
