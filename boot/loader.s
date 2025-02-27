@@ -145,11 +145,11 @@ call setup_page
 	sgdt [gdt_ptr]		;将gdtr中的值放入[gdt_ptr]中
 
 ;将gdt描述符中视频段描述符中的段基址+0xc0000000 
-	mov ebx,[gdt_ptr+8]
+	mov ebx,[gdt_ptr+2]
 	or dword [ebx+0x18+4],0xc0000000
 
 ;将gdt的基址加上0xc0000000使其成为内核所在的高地址
-	add [gdt_ptr+8],0xc00000000
+	add [gdt_ptr+2],0xc00000000
 
 ;将栈指针同样映射到内核地址
 	add esp,0xc0000000
@@ -168,7 +168,7 @@ call setup_page
 
 	mov [gs:160],'V'
 	jmp $
-	
+
 ;------------- 创建页目录及页表 --------------- 
 ;把1M上面4k的内存清空给页目录用
 setup_page:
