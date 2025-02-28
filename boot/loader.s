@@ -148,7 +148,7 @@ p_mode_start:
 	mov ax,SELECTOR_VIDEO
 	mov gs,ax
 	 
-	mov byte [gs:162],'p'
+	mov byte [gs:160],'p'
 
 ;---------------------- 启动分页 ---------------------
 	call setup_page
@@ -177,7 +177,7 @@ p_mode_start:
 
 	mov ax,SELECTOR_VIDEO
 	mov gs,ax
-	mov byte [gs:160],'V'
+	mov byte [gs:162],'V'
 	jmp $
 
 ;------------- 创建页目录及页表 --------------- 
