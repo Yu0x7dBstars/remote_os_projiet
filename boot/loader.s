@@ -112,8 +112,6 @@ loader_start:
 
 .mem_get_ok:
 	mov [total_mem_bytes],edx	;将内存换算成byte单位放到[total_mem_bytes]
-.error_hlt:
-	hlt							;暂停 CPU 的执行,进入一种低功耗的等待直到接收到外部中断或系统管理中断
 	
 ;---------------- 准备进入保护模式 ----------------
 ;1打开A20
@@ -136,6 +134,8 @@ loader_start:
 ;-------------------- 已经进入保护模式 -------------------
 	jmp dword SELECTOR_CODE:p_mode_start	;刷新流水线
 
+.error_hlt:						
+ 	hlt							;暂停 CPU 的执行,进入一种低功耗的等待直到接收到外部中断或系统管理中断
 
 
 [bits 32]
@@ -148,8 +148,9 @@ p_mode_start:
 	mov ax,SELECTOR_VIDEO
 	mov gs,ax
 	 
-	mov byte [gs:160],'p'
+	mov byte [gs:162],'p'
 
+;---------------------- 启动分页 ---------------------
 	call setup_page
 	sgdt [gdt_ptr]						;将gdtr中的值放入[gdt_ptr]中
 
@@ -157,7 +158,7 @@ p_mode_start:
 	mov ebx,[gdt_ptr+2]					;将gdt描述符中视频段描述符中的段基址+0xc0000000 
 	or dword [ebx+0x18+4],0xc0000000
 
-	add dword [gdt_ptr+2],0xc00000000	;将gdt的基址加上0xc0000000使其成为内核所在的高地址
+	add dword [gdt_ptr+2],0xc0000000	;将gdt的基址加上0xc0000000使其成为内核所在的高地址
 
 
 	add esp,0xc0000000					;将栈指针同样映射到内核地址
@@ -171,9 +172,11 @@ p_mode_start:
 	or eax,0x80000000
 	mov cr0,eax
 
-;在开启分页后，用gdt新的地址重新加载 
+;在开启分页后，用gdt的新地址重新加载 
 	lgdt [gdt_ptr]
 
+	mov ax,SELECTOR_VIDEO
+	mov gs,ax
 	mov byte [gs:160],'V'
 	jmp $
 

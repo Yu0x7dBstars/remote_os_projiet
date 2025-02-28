@@ -1,0 +1,13 @@
+1:
+编译没过不知道为什么changed during code generation [-w+error=label-redef-late]还是先跑起来再继续
+ans1:
+mbr跳转时没有加上loader开头数据的偏移导致直接跳到数据处
+
+2:
+代码5-4要更新gs
+
+3:
+.error_hlt:为什么放在mem_get_ok后面就会出错没有打印信息，放进入保护模式后面这里就OK了？
+ans3:
+放在mem_get_ok后面不就进入了吗，应该放在mem_get_ok前面(那最后一个方法也要jmp到ok处)，
+进入保护模式后就跳到p_mode_start也不会进入hlt。这个错误太呆了
