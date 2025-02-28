@@ -44,12 +44,12 @@ SECTION MBR vstart=0x7c00
 	mov byte [gs:0x08],'R'
 	mov byte [gs:0x09],0xA4
 	
-	mov eax,LOADER_START_SECTOR	;起始扇区地址
-	mov bx,LOADER_BASE_ADDR		;写入的地址
-	mov cx,4					;待读入的扇区数
+	mov eax,LOADER_START_SECTOR		;起始扇区地址
+	mov bx,LOADER_BASE_ADDR			;写入的地址
+	mov cx,4						;待读入的扇区数
 	call rd_disk_m_16
 
-	jmp LOADER_BASE_ADDR
+	jmp LOADER_BASE_ADDR + 0x300	;LOADER_BASE_ADDR前0x300个字节都是数据，直接跳过执行指令
 
 ;-----------------------------------------------------------
 ;功能:读取磁盘n个扇区
@@ -59,16 +59,16 @@ rd_disk_m_16:
 ;eax=LBA扇区号
 ;bx=将数据写入的内存地址
 ;cx=读入的扇区数
-	mov esi,eax	;备份eax
-	mov di,cx	;备份cx
+	mov esi,eax		;备份eax
+	mov di,cx		;备份cx
 
 ;读写硬盘
 ;第一步:设置要读取的扇区数
 	mov dx,0x1f2
 	mov al,cl
-	out dx,al	;读取的扇区数
+	out dx,al		;读取的扇区数
 
-	mov eax,esi	;恢复ax
+	mov eax,esi		;恢复ax
 
 ;第二步:将LBA地址存入0x1f3-0x1f6
 	;LBA地址7-0位写入端口0x1f3
@@ -87,8 +87,8 @@ rd_disk_m_16:
 	out dx,al
 	
 	shr eax,cl
-	and al,0x0f	;LBA第24-27位
-	or al,0xe0	;设置7-4位为1110,表示LBA模式
+	and al,0x0f		;LBA第24-27位
+	or al,0xe0		;设置7-4位为1110,表示LBA模式
 	mov dx,0x1f6
 	out dx,al
 
@@ -103,7 +103,7 @@ rd_disk_m_16:
 	nop
 	in al,dx
 	and al,0x88
-	cmp al,0x08	;第四位为1表示硬盘控制器已经准备好传输数据,第七位为1表示硬盘忙
+	cmp al,0x08		;第四位为1表示硬盘控制器已经准备好传输数据,第七位为1表示硬盘忙
 	jnz .not_ready
 
 ;第五步:从0x1f0端口读数据

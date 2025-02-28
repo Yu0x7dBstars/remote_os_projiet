@@ -38,26 +38,26 @@ ards_nr dw 0	;用于记录ards结构体数量
 loader_start:
 ;int 0x15	eax=0000e820h, edx=534d4150h('SMAP')获取内存布局
 
-	xor ebx,ebx		;第一次调用时ebx值要为0
-	mov edx,0x534d4150		;edx只用赋值一次，循环中不会改变
-	mov di,ards_buf		;ards结构缓冲区
+	xor ebx,ebx						;第一次调用时ebx值要为0
+	mov edx,0x534d4150				;edx只用赋值一次，循环中不会改变
+	mov di,ards_buf					;ards结构缓冲区
 .e820_mem_get_loop:
-	mov eax,0x0000e820		;每次执行后返回eax变为0x534d4150，需要重置
-	mov ecx,20		;ARDS结构的字节大小：用来指示BIOS写入的字节数
+	mov eax,0x0000e820				;每次执行后返回eax变为0x534d4150，需要重置
+	mov ecx,20						;ARDS结构的字节大小：用来指示BIOS写入的字节数
 	int 0x15
 	jc .e820_failed_so_try_e801		;cf返回1表示发生错误，调用0xe801子功能号
-	add di,cx	;di指向新的ards结构体地址
-	inc word [ards_nr]	;ards个数加一
-	cmp ebx,0	;若cf=0且ebx为0表示这是最后一个ards
+	add di,cx						;di指向新的ards结构体地址
+	inc word [ards_nr]				;ards个数加一
+	cmp ebx,0						;若cf=0且ebx为0表示这是最后一个ards
 	jnz .e820_mem_get_loop
 
 ;在所有的ards中找到(base_add_low+lengh_low)的最大值
 	mov cx,[ards_nr]
 	mov ebx,ards_buf
-	xor edx,edx		;最大内存容量
+	xor edx,edx			;最大内存容量
 
 .find_max_mem_area:
-	mov eax,[ebx]	;base_add_low		
+	mov eax,[ebx]		;base_add_low		
 	add eax,[ebx+8] 	;lenth_low
 	cmp edx,eax
 	add ebx,20
@@ -68,7 +68,7 @@ loader_start:
 	loop .find_max_mem_area
 	jmp .mem_get_ok
 
-;------  int 15h ax = E801h 获取内存大小，最大支持4G  ------ 
+;------------------ int 15h ax = E801h 获取内存大小，最大支持4G -------------------- 
 ; 返回后, ax cx 值一样,以KB为单位，bx dx值一样，以64KB为单位 
 ; 在 ax 和cx寄存器中为低16MB，在bx和dx寄存器中为16MB到4GB 	
 .e820_failed_so_try_e801:
@@ -85,14 +85,15 @@ loader_start:
 	and eax,0x0000ffff
 	or edx,eax
 
-	add eax,0x100000	;还要再加1M
-	mov esi,eax		;备份低15M内存
+	add eax,0x100000		;还要再加1M
+	mov esi,eax				;备份低15M内存
+
 ;2 再将 16MB以上的内存转换为byte为单位 
 ;寄存器bx和dx中是以64KB为单位的内存数量 
 	xor eax,eax
 	mov ax,bx
 	mov ecx,0x10000
-	mul ecx		;64位的积，低32位的eax足够了,此方法只能测出4GB以内的内存,edx=0
+	mul ecx					;64位的积，低32位的eax足够了,此方法只能测出4GB以内的内存,edx=0
 	add esi,eax
 	mov edx,esi
 	jmp .mem_get_ok
@@ -107,31 +108,35 @@ loader_start:
 	mul cx
 	shl edx,16
 	or edx,eax
-	add edx,0x100000	;再加1M
+	add edx,0x100000			;再加1M
 
 .mem_get_ok:
-;将内存换算成byte单位放到[total_mem_bytes]
-	mov [total_mem_bytes],edx
-
+	mov [total_mem_bytes],edx	;将内存换算成byte单位放到[total_mem_bytes]
+.error_hlt:
+	hlt							;暂停 CPU 的执行,进入一种低功耗的等待直到接收到外部中断或系统管理中断
+	
 ;---------------- 准备进入保护模式 ----------------
 ;1打开A20
 ;2加载gdt
 ;3将cr0的pe位置为1
 
-;---------------- 打开A20 ---------------
+;打开A20
 	in al,0x92
 	or al,0000_0010
 	out 0x92,al
 
-;---------------- 加载gdt ---------------
+;加载gdt
 	lgdt [gdt_ptr]
 
-;---------------- cr0第0位置1 ---------------
+;cr0第0位置1
 	mov eax,cr0 
 	or eax,0x00000001
 	mov cr0,eax
 
+;-------------------- 已经进入保护模式 -------------------
 	jmp dword SELECTOR_CODE:p_mode_start	;刷新流水线
+
+
 
 [bits 32]
 p_mode_start:
@@ -145,18 +150,17 @@ p_mode_start:
 	 
 	mov byte [gs:160],'p'
 
-call setup_page
-	sgdt [gdt_ptr]		;将gdtr中的值放入[gdt_ptr]中
+	call setup_page
+	sgdt [gdt_ptr]						;将gdtr中的值放入[gdt_ptr]中
 
-;将gdt描述符中视频段描述符中的段基址+0xc0000000 
-	mov ebx,[gdt_ptr+2]
+
+	mov ebx,[gdt_ptr+2]					;将gdt描述符中视频段描述符中的段基址+0xc0000000 
 	or dword [ebx+0x18+4],0xc0000000
 
-;将gdt的基址加上0xc0000000使其成为内核所在的高地址
-	add dword [gdt_ptr+2],0xc00000000
+	add dword [gdt_ptr+2],0xc00000000	;将gdt的基址加上0xc0000000使其成为内核所在的高地址
 
-;将栈指针同样映射到内核地址
-	add esp,0xc0000000
+
+	add esp,0xc0000000					;将栈指针同样映射到内核地址
 
 ;把页目录地址赋给cr3 
 	mov eax,PAGE_DIR_TABLE_POS
@@ -184,18 +188,18 @@ setup_page:
 	loop .clear_page_dir
 
 ;开始创建页目录项(PDE) 
-.create_pde:	;创建Page Directory Entry
+.create_pde:								;创建Page Directory Entry
 	mov eax,PAGE_DIR_TABLE_POS
-	add eax,0x1000		;eax指向第一个页表的位置
-	mov ebx,eax		;第一个页表的位置将来会用到要保存下来
-	or eax,PAGE_US_U | PAGE_RW_W | PAGE_P   	;逻辑或选择属性组合
+	add eax,0x1000							;eax指向第一个页表的位置
+	mov ebx,eax								;第一个页表的位置将来会用到要保存下来
+	or eax,PAGE_US_U | PAGE_RW_W | PAGE_P   ;逻辑或选择属性组合
 	mov [PAGE_DIR_TABLE_POS+0x0],eax		;页目录的第0项和第768项都放第一个页表的地址+属性
 	mov [PAGE_DIR_TABLE_POS+0xc00],eax		;0xc00代表页目录的3/4处，上面的1G属于os
 	sub eax,0x1000
 	mov [PAGE_DIR_TABLE_POS+4092],eax		;页目录最后一项放页目录自身的地址
 
 ;下面创建页表项(PTE)
-	mov ecx,256		;把第一个页表的前256项(可映射1M)映射到物理地址低1M
+	mov ecx,256								;把第一个页表的前256项(可映射1M)映射到物理地址低1M
 	mov esi,0
 	mov edx,PAGE_US_U | PAGE_RW_W | PAGE_P
 
@@ -207,7 +211,7 @@ setup_page:
 
 ;创建内核其他页表的PDE,但还没有与物理地址映射，只是填充了页目录项
 	mov eax,PAGE_DIR_TABLE_POS
-	add eax,0x2000		;eax为第二个页表的位置
+	add eax,0x2000							;eax为第二个页表的位置
 	or eax,PAGE_US_U | PAGE_RW_W | PAGE_P
 	mov ebx,PAGE_DIR_TABLE_POS
 
