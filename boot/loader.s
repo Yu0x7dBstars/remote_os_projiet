@@ -150,6 +150,13 @@ p_mode_start:
 	 
 	mov byte [gs:160],'p'
 
+;rd_disk_m_16功能:读取磁盘n个扇区,eax=LBA扇区号,bx=将数据写入的内存地址,cx=读入的扇区数mov eax
+	mov eax,KERNEL_START_SECTOR
+	mov ebx,KERNEL_BIN_BASE_ADDR
+	mov ecx,200
+
+	call rd_disk_m_32
+
 ;---------------------- 启动分页 ---------------------
 	call setup_page
 	sgdt [gdt_ptr]						;将gdtr中的值放入[gdt_ptr]中
@@ -178,7 +185,58 @@ p_mode_start:
 	mov ax,SELECTOR_VIDEO
 	mov gs,ax
 	mov byte [gs:162],'V'
-	jmp $
+
+;----------   将kernel.bin中的segment拷贝到编译的地址   ----------- 
+kernel_init:
+	xor eax,eax
+	xor ebx,ebx		;ebx记录程序头表地址	
+	xor ecx,ecx		;cx记录程序头表中program header的数量
+	xor edx,edx		;dx记录program header尺寸，即e_phentsize
+
+	mov dx,[KERNEL_BIN_BASE_ADDR + 42]		;偏移elf_header42个字节处是e_phentsize
+	mov ebx,[KERNEL_BIN_BASE_ADDR + 28]		;e_phoff,表示第 1 个 program header 在文件中的偏移量 
+	add ebx,KERNEL_BIN_BASE_ADDR
+	mov cx,[KERNEL_BIN_BASE_ADDR + 44]
+
+.each_segment:
+	cmp dword [ebx],0		;比较程序头表p_type,0表示忽略
+	je .PTNULL
+
+;为函数memcpy压入参数，参数是从右往左依然压入,函数原型类似于 memcpy（dst，src，size）
+	push dword [ebx + 16]	;压入p_filesz
+	mov eax,[ebx + 4]
+	add eax,KERNEL_BIN_BASE_ADDR
+	push eax				;压入第一个段要放在内存中的地址,源地址
+	push dword [ebx + 8]	;压入p_vaddr目的地址
+	 
+	call mem_cpy
+	add esp,12
+
+.PTNULL:
+	add ebx,edx		;指向下一个程序头
+	loop .each_segment
+	ret
+
+;----------  逐字节拷贝 mem_cpy（dst，src，size） ------------ 
+;输入:栈中三个参数（dst，src，size） 
+;输出:无 
+;--------------------------------------------------------- 
+mem_cpy:
+	cld					;esi，edi递增
+	push ebp
+	mov ebp,esp
+	push ecx
+	mov edi,[ebp + 8]
+	mov esi,[ebp + 12]
+	mov ecx,[ebp + 16]
+	rep movsb
+	pop ecx
+	pop ebp
+	ret
+	
+
+
+
 
 ;------------- 创建页目录及页表 --------------- 
 ;把1M上面4k的内存清空给页目录用
@@ -219,7 +277,7 @@ setup_page:
 	mov ebx,PAGE_DIR_TABLE_POS
 
 	;页目录第0项和第768项已经创建，现将第769~第1022项的虚拟地址映射到低地址
-	;第768项到第1022项似乎不够虚拟地址3G—4G差了4M，第1023项存PDE地址了，但感觉问题不大
+	;第768项到第1022项似乎不够虚拟地址3G—4G差了4M，第1023项存PDE地址了
 	mov ecx,254		
 	mov esi,769
 
