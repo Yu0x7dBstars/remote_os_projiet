@@ -3,7 +3,7 @@ section loader vstart=LOADER_BASE_ADDR
 LOADER_STACK_TOP equ LOADER_BASE_ADDR
 
 ;构建GDT及其内部的描述符
-GDT_BASE:	dd 0x00000000	;第0个描述符不用
+GDT_BASE:	dd 0x00000000		;第0个描述符不用
 			dd 0x00000000
 
 CODE_DESC:	dd 0x0000ffff
@@ -12,7 +12,7 @@ CODE_DESC:	dd 0x0000ffff
 DATA_DESC:	dd 0x0000ffff
 			dd DESC_DATA_HIGH4
 
-VIDEO_DESC:	dd 0x80000007	;段基址0~15是8000，limit是7*4k
+VIDEO_DESC:	dd 0x80000007		;段基址0~15是8000，limit是7*4k
 			dd DESC_VIDEO_HIGH4
 		
 GDT_SIZE equ $ - GDT_BASE
@@ -22,18 +22,18 @@ SELECTOR_CODE equ (0x0001<<3) + TI_GDT + RPL0
 SELECTOR_DATA equ (0x0002<<3) + TI_GDT + RPL0
 SELECTOR_VIDEO equ (0x0003<<3) + TI_GDT + RPL0
 
-times 60 dq 0	;预留60个描述符的空位，四字
+times 60 dq 0				;预留60个描述符的空位，四字
 
 ;total_mem_bytes用于保存内存容量，当前偏移文件头0x200位置
-total_mem_bytes dd 0	;内存中位置为0x900+0x200=0xb00
+total_mem_bytes dd 0		;内存中位置为0x900+0x200=0xb00
 
 ;gdt指针前两字节为gdt界限最大为2的16次方减一，后四字节为gdt起始地址
-gdt_ptr	dw GDT_LIMIT	;更类似变量
-		dd GDT_BASE		;仅地址标号
+gdt_ptr	dw GDT_LIMIT		;更类似变量
+		dd GDT_BASE			;仅地址标号
 
 ;人工对齐，total_mem_bytes+gdt_ptr+ards_buf+ards_nr，共256个字节
 ards_buf times 244 db 0
-ards_nr dw 0	;用于记录ards结构体数量
+ards_nr dw 0				;用于记录ards结构体数量
 
 loader_start:
 ;int 0x15	eax=0000e820h, edx=534d4150h('SMAP')获取内存布局
@@ -145,16 +145,11 @@ p_mode_start:
 	mov es,ax
 	mov ss,ax
 	mov esp,LOADER_STACK_TOP
-	mov ax,SELECTOR_VIDEO
-	mov gs,ax
-	 
-	mov byte [gs:160],'p'
 
-;rd_disk_m_16功能:读取磁盘n个扇区,eax=LBA扇区号,bx=将数据写入的内存地址,cx=读入的扇区数mov eax
-	mov eax,KERNEL_START_SECTOR
-	mov ebx,KERNEL_BIN_BASE_ADDR
-	mov ecx,200
-
+; -------------------------   加载 kernel  ---------------------- 
+	mov eax, KERNEL_START_SECTOR  		;kernel.bin 所在的扇区号 
+    mov ebx, KERNEL_BIN_BASE_ADDR 		;从磁盘读出后，写入到 ebx 指定的地址 
+    mov ecx, 200                   		;读入的扇区数
 	call rd_disk_m_32
 
 ;---------------------- 启动分页 ---------------------
@@ -182,9 +177,10 @@ p_mode_start:
 ;在开启分页后，用gdt的新地址重新加载 
 	lgdt [gdt_ptr]
 
-	mov ax,SELECTOR_VIDEO
-	mov gs,ax
-	mov byte [gs:162],'V'
+;---------------------- 初始化内核 ---------------------
+	call kernel_init
+	mov esp,0xc009f000
+	jmp KERNEL_ENTRY_POINT
 
 ;----------   将kernel.bin中的segment拷贝到编译的地址   ----------- 
 kernel_init:
@@ -199,21 +195,21 @@ kernel_init:
 	mov cx,[KERNEL_BIN_BASE_ADDR + 44]
 
 .each_segment:
-	cmp dword [ebx],0		;比较程序头表p_type,0表示忽略
+	cmp dword [ebx],0				;比较程序头表p_type,0表示忽略
 	je .PTNULL
 
 ;为函数memcpy压入参数，参数是从右往左依然压入,函数原型类似于 memcpy（dst，src，size）
-	push dword [ebx + 16]	;压入p_filesz
+	push dword [ebx + 16]			;压入p_filesz
 	mov eax,[ebx + 4]
 	add eax,KERNEL_BIN_BASE_ADDR
-	push eax				;压入第一个段要放在内存中的地址,源地址
-	push dword [ebx + 8]	;压入p_vaddr目的地址
+	push eax						;压入第一个段要放在内存中的地址,源地址
+	push dword [ebx + 8]			;压入p_vaddr目的地址
 	 
 	call mem_cpy
 	add esp,12
 
 .PTNULL:
-	add ebx,edx		;指向下一个程序头
+	add ebx,edx						;指向下一个程序头
 	loop .each_segment
 	ret
 
@@ -222,7 +218,7 @@ kernel_init:
 ;输出:无 
 ;--------------------------------------------------------- 
 mem_cpy:
-	cld					;esi，edi递增
+	cld								;esi，edi递增
 	push ebp
 	mov ebp,esp
 	push ecx
@@ -234,10 +230,6 @@ mem_cpy:
 	pop ebp
 	ret
 	
-
-
-
-
 ;------------- 创建页目录及页表 --------------- 
 ;把1M上面4k的内存清空给页目录用
 setup_page:
@@ -276,8 +268,8 @@ setup_page:
 	or eax,PAGE_US_U | PAGE_RW_W | PAGE_P
 	mov ebx,PAGE_DIR_TABLE_POS
 
-	;页目录第0项和第768项已经创建，现将第769~第1022项的虚拟地址映射到低地址
-	;第768项到第1022项似乎不够虚拟地址3G—4G差了4M，第1023项存PDE地址了
+;页目录第0项和第768项已经创建，现将第769~第1022项的虚拟地址映射到低地址
+;第768项到第1022项似乎不够虚拟地址3G—4G差了4M，第1023项存PDE地址了，但感觉问题不大
 	mov ecx,254		
 	mov esi,769
 
@@ -287,4 +279,72 @@ setup_page:
 	add eax,0x1000
 	loop .create_kernel_pde
 	ret
+
+
+;加载 kernel
+rd_disk_m_32:
+;eax=LBA扇区号
+;ebx=将数据写入的内存地址
+;ecx=读入的扇区数
+	mov esi,eax		;备份eax
+	mov di,cx		;备份cx
+
+;读写硬盘
+;第一步:设置要读取的扇区数
+	mov dx,0x1f2
+	mov al,cl
+	out dx,al		;读取的扇区数
+
+	mov eax,esi		;恢复ax
+
+;第二步:将LBA地址存入0x1f3-0x1f6
+	;LBA地址7-0位写入端口0x1f3
+	mov dx,0x1f3
+	out dx,al
+
+	;LBA地址15-8位写入端口0x1f4
+	mov cl,8
+	shr eax,cl
+	mov dx,0x1f4
+	out dx,al
+
+	;LBA地址23-16位写入端口0x1f5
+	shr eax,cl
+	mov dx,0x1f5
+	out dx,al
+	
+	shr eax,cl
+	and al,0x0f		;LBA第24-27位
+	or al,0xe0		;设置7-4位为1110,表示LBA模式
+	mov dx,0x1f6
+	out dx,al
+
+;第三步:向0x1f7端口写入读命令,0x20
+	mov dx,0x1f7
+	mov al,0x20
+	out dx,al
+
+;第四步:检查硬盘状态
+.not_ready:
+	;同一端口写时表示写入命令字,读时表示读入硬盘状态
+	nop
+	in al,dx
+	and al,0x88
+	cmp al,0x08		;第四位为1表示硬盘控制器已经准备好传输数据,第七位为1表示硬盘忙
+	jnz .not_ready
+
+;第五步:从0x1f0端口读数据
+	mov ax,di
+	mov dx,256
+	mul dx
+	mov cx,ax
+	;di为要读取的扇区数,每次读入一个字,一共要读di*512/2次
+	mov dx,0x1f0
+.go_on_read:
+	in ax,dx
+	mov [ebx],ax
+	add ebx,2
+	loop .go_on_read
+	ret
+
 

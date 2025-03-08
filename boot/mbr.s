@@ -122,3 +122,6 @@ rd_disk_m_16:
 
 	times 510-($-$$) db 0
 	db 0x55,0xaa
+;let's go!
+;let's go!
+
